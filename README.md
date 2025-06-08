@@ -711,8 +711,14 @@ during the build, will be more precise as to which parts will not be built.
 
 ### Building AtomSpace
 
-Be sure to install the pre-requisites first!
-Perform the following steps at the shell prompt:
+**Prerequisites must be installed first!** Run:
+```bash
+./install-prerequisites.sh
+```
+
+Or see the manual installation instructions below.
+
+Once prerequisites are installed, perform the following steps at the shell prompt:
 ```
     cd to project root dir
     mkdir build
