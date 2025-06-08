@@ -67,6 +67,7 @@ IF (HAVE_GUILE)
 	ADD_CXXTEST(GetStateUTest)
 	ADD_CXXTEST(ClassicalBooleanUTest)
 	ADD_CXXTEST(DeepTypeUTest)
+	ADD_CXXTEST(GeometricUnityUTest)
 ENDIF (HAVE_GUILE)
 
 ADD_CXXTEST(TypeChoiceUTest)
