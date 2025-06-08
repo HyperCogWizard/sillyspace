@@ -82,6 +82,7 @@ requires-python = ">=3.8"
 
 dependencies = [
     "nose3",  # For testing
+    "pyyaml",  # For ElizaCog configuration
 ]
 
 [project.optional-dependencies]
@@ -90,6 +91,9 @@ dev = [
     "nose3",
     "build",
 ]
+
+[project.scripts]
+elizacog = "opencog.elizacog.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/opencog/atomspace"
