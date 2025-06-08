@@ -1,0 +1,1415 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  CCACHE_DIR: ${{ github.workspace }}/ccache
+  MAKEFLAGS: -j2
+
+jobs:
+  atomspace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AtomSpace
+        uses: actions/checkout@v4
+        with:
+          path: atomspace
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ccache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Cache GHC
+        uses: actions/cache@v4
+        with:
+          path: ~/.stack
+          key: ghc-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ runner.arch }}
+          restore-keys: |
+            ghc-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-
+
+      - name: Cache Haskell Deps
+        uses: actions/cache@v4
+        with:
+          path: atomspace/opencog/haskell/.stack-work
+          key: haskelldeps-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ hashFiles('atomspace/opencog/haskell/opencog-atomspace.cabal') }}-${{ runner.arch }}
+          restore-keys: |
+            haskelldeps-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ hashFiles('atomspace/opencog/haskell/opencog-atomspace.cabal') }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            libcogutil-dev \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/cogutil cogutil
+          mkdir -p cogutil/build
+          cd cogutil/build
+          cmake ..
+          make -j2
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: CMake Configure
+        run: |
+          cd atomspace
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd atomspace/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd atomspace/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd atomspace/build
+          make -j2 check
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Build examples
+        run: |
+          cd atomspace/build
+          make -j2 examples
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f atomspace/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat atomspace/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-atomspace
+          path: |
+            cogutil/
+            atomspace/
+            ccache/
+          retention-days: 1
+
+  atomspace-storage:
+    runs-on: ubuntu-latest
+    needs: atomspace
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-atomspace
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout AtomSpaceStorage
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/atomspace-storage atomspace-storage
+
+      - name: CMake Configure
+        run: |
+          cd atomspace-storage
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd atomspace-storage/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd atomspace-storage/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd atomspace-storage/build
+          make check
+
+      - name: Install AtomSpaceStorage
+        run: |
+          cd atomspace-storage/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f atomspace-storage/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat atomspace-storage/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-atomspace-storage
+          path: |
+            cogutil/
+            atomspace/
+            atomspace-storage/
+            ccache/
+          retention-days: 1
+
+  atomspace-pgres:
+    runs-on: ubuntu-latest
+    needs: [atomspace, atomspace-storage]
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: opencog_test
+          POSTGRES_PASSWORD: cheese
+          POSTGRES_DB: opencog_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      PGHOST: localhost
+      PGUSER: opencog_test
+      PGPASSWORD: cheese
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-atomspace-storage
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            libpq-dev postgresql-client \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpaceStorage
+        run: |
+          cd atomspace-storage/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout AtomSpacePgres
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/atomspace-pgres atomspace-pgres
+
+      - name: CMake Configure
+        run: |
+          cd atomspace-pgres
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd atomspace-pgres/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd atomspace-pgres/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd atomspace-pgres/build
+          make check
+
+      - name: Install AtomSpacePgres
+        run: |
+          cd atomspace-pgres/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f atomspace-pgres/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat atomspace-pgres/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-atomspace-pgres
+          path: |
+            cogutil/
+            atomspace/
+            atomspace-storage/
+            atomspace-pgres/
+            ccache/
+          retention-days: 1
+
+  atomspace-rocks:
+    runs-on: ubuntu-latest
+    needs: [atomspace, atomspace-storage]
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-atomspace-storage
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            librocksdb-dev \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpaceStorage
+        run: |
+          cd atomspace-storage/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout AtomSpaceRocks
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/atomspace-rocks atomspace-rocks
+
+      - name: CMake Configure
+        run: |
+          cd atomspace-rocks
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd atomspace-rocks/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd atomspace-rocks/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd atomspace-rocks/build
+          make check
+
+      - name: Install AtomSpaceRocks
+        run: |
+          cd atomspace-rocks/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f atomspace-rocks/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat atomspace-rocks/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-atomspace-rocks
+          path: |
+            cogutil/
+            atomspace/
+            atomspace-storage/
+            atomspace-rocks/
+            ccache/
+          retention-days: 1
+
+  cogserver:
+    runs-on: ubuntu-latest
+    needs: [atomspace, atomspace-storage]
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-atomspace-storage
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make install
+          sudo ldconfig
+
+      - name: Install AtomSpaceStorage
+        run: |
+          cd atomspace-storage/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout CogServer
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/cogserver cogserver
+
+      - name: CMake Configure
+        run: |
+          cd cogserver
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd cogserver/build
+          make
+
+      - name: Build tests
+        run: |
+          cd cogserver/build
+          make tests
+
+      # Tests disabled due to https://github.com/opencog/cogserver/issues/5
+      # - name: Run tests
+      #   run: |
+      #     cd cogserver/build
+      #     make check
+
+      - name: Install CogServer
+        run: |
+          cd cogserver/build
+          sudo make install
+          sudo ldconfig
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-cogserver
+          path: |
+            cogutil/
+            atomspace/
+            atomspace-storage/
+            cogserver/
+            ccache/
+          retention-days: 1
+
+  atomspace-cog:
+    runs-on: ubuntu-latest
+    needs: [atomspace, atomspace-storage, cogserver]
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-cogserver
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace Storage
+        run: |
+          cd atomspace-storage/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install CogServer
+        run: |
+          cd cogserver/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout AtomSpace Cog
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/atomspace-cog atomspace-cog
+
+      - name: CMake Configure
+        run: |
+          cd atomspace-cog
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd atomspace-cog/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd atomspace-cog/build
+          make -j2 tests
+
+      # Tests disabled due to https://github.com/opencog/cogserver/issues/5
+      # - name: Run tests
+      #   run: |
+      #     cd atomspace-cog/build
+      #     make check
+
+      - name: Install AtomSpace Cog
+        run: |
+          cd atomspace-cog/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-atomspace-cog
+          path: |
+            cogutil/
+            atomspace/
+            atomspace-storage/
+            cogserver/
+            atomspace-cog/
+            ccache/
+          retention-days: 1
+
+  matrix:
+    runs-on: ubuntu-latest
+    needs: [atomspace, atomspace-pgres]
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: opencog_test
+          POSTGRES_PASSWORD: cheese
+          POSTGRES_DB: opencog_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      PGHOST: localhost
+      PGUSER: opencog_test
+      PGPASSWORD: cheese
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-atomspace-pgres
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            libpq-dev postgresql-client \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpaceStorage
+        run: |
+          cd atomspace-storage/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpacePgres
+        run: |
+          cd atomspace-pgres/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout Matrix system
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/matrix matrix
+
+      - name: CMake Configure
+        run: |
+          cd matrix
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd matrix/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd matrix/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd matrix/build
+          make check
+
+      - name: Install Matrix
+        run: |
+          cd matrix/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f matrix/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat matrix/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-matrix
+          path: |
+            cogutil/
+            atomspace/
+            atomspace-storage/
+            atomspace-pgres/
+            matrix/
+            ccache/
+          retention-days: 1
+
+  spacetime:
+    runs-on: ubuntu-latest
+    needs: atomspace
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-atomspace
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout SpaceTime
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/spacetime spacetime
+
+      - name: CMake Configure
+        run: |
+          cd spacetime
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd spacetime/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd spacetime/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd spacetime/build
+          make -j2 check ARGS=-j2
+
+      - name: Install spacetime
+        run: |
+          cd spacetime/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f spacetime/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat spacetime/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-spacetime
+          path: |
+            cogutil/
+            atomspace/
+            spacetime/
+            ccache/
+          retention-days: 1
+
+  unify:
+    runs-on: ubuntu-latest
+    needs: atomspace
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-atomspace
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout Unify
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/unify unify
+
+      - name: CMake Configure
+        run: |
+          cd unify
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd unify/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd unify/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd unify/build
+          make -j2 check ARGS=-j2
+
+      - name: Install Unify
+        run: |
+          cd unify/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f unify/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat unify/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-unify
+          path: |
+            cogutil/
+            atomspace/
+            unify/
+            ccache/
+          retention-days: 1
+
+  ure:
+    runs-on: ubuntu-latest
+    needs: [atomspace, unify]
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-unify
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install Unify
+        run: |
+          cd unify/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout URE
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/ure ure
+
+      - name: CMake Configure
+        run: |
+          cd ure
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd ure/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd ure/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd ure/build
+          make -j2 check ARGS=-j2
+
+      - name: Install URE
+        run: |
+          cd ure/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f ure/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat ure/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-ure
+          path: |
+            cogutil/
+            atomspace/
+            unify/
+            ure/
+            ccache/
+          retention-days: 1
+
+  miner:
+    runs-on: ubuntu-latest
+    needs: [atomspace, ure]
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-ure
+
+      - name: Cache GHC
+        uses: actions/cache@v4
+        with:
+          path: ~/.stack
+          key: ghc-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ runner.arch }}
+          restore-keys: |
+            ghc-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-
+
+      - name: Cache Haskell Deps
+        uses: actions/cache@v4
+        with:
+          path: atomspace/opencog/haskell/.stack-work
+          key: haskelldeps-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ hashFiles('atomspace/opencog/haskell/opencog-atomspace.cabal') }}-${{ runner.arch }}
+          restore-keys: |
+            haskelldeps-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ hashFiles('atomspace/opencog/haskell/opencog-atomspace.cabal') }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install Unify
+        run: |
+          cd unify/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install URE
+        run: |
+          cd ure/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout Miner
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/miner miner
+
+      - name: CMake Configure
+        run: |
+          cd miner
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd miner/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd miner/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd miner/build
+          make -j2 check ARGS=-j2
+
+      - name: Install Miner
+        run: |
+          cd miner/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f miner/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat miner/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-miner
+          path: |
+            cogutil/
+            atomspace/
+            unify/
+            ure/
+            miner/
+            ccache/
+          retention-days: 1
+
+  pln:
+    runs-on: ubuntu-latest
+    needs: [atomspace, ure, spacetime]
+    steps:
+      - name: Download workspace (URE)
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-ure
+
+      - name: Download workspace (SpaceTime)
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-spacetime
+          path: spacetime-artifacts
+
+      - name: Merge spacetime artifacts
+        run: |
+          cp -r spacetime-artifacts/spacetime ./spacetime
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install Unify
+        run: |
+          cd unify/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install URE
+        run: |
+          cd ure/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install SpaceTime
+        run: |
+          cd spacetime/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout PLN
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/pln pln
+
+      - name: CMake Configure
+        run: |
+          cd pln
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd pln/build
+          make -j2
+
+      - name: Install PLN
+        run: |
+          cd pln/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Build tests
+        run: |
+          cd pln/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd pln/build
+          make -j2 check ARGS=-j2
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f pln/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat pln/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-pln
+          path: |
+            cogutil/
+            atomspace/
+            unify/
+            ure/
+            spacetime/
+            pln/
+            ccache/
+          retention-days: 1
+
+  attention:
+    runs-on: ubuntu-latest
+    needs: [atomspace, cogserver]
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-cogserver
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make install
+          sudo ldconfig
+
+      - name: Install AtomSpaceStorage
+        run: |
+          cd atomspace-storage/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install CogServer
+        run: |
+          cd cogserver/build
+          sudo make install
+          sudo ldconfig
+
+      - name: Checkout Attention
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/attention attention
+
+      - name: CMake Configure
+        run: |
+          cd attention
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd attention/build
+          make
+
+      - name: Build tests
+        run: |
+          cd attention/build
+          make tests
+
+      - name: Run tests
+        run: |
+          cd attention/build
+          make check
+
+      - name: Install Attention
+        run: |
+          cd attention/build
+          sudo make install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f attention/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat attention/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-attention
+          path: |
+            cogutil/
+            atomspace/
+            atomspace-storage/
+            cogserver/
+            attention/
+            ccache/
+          retention-days: 1
+
+  opencog:
+    runs-on: ubuntu-latest
+    needs: [atomspace, attention, cogserver, ure]
+    steps:
+      - name: Download workspace (attention)
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-attention
+
+      - name: Download workspace (ure)
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-ure
+          path: ure-artifacts
+
+      - name: Merge URE artifacts
+        run: |
+          cp -r ure-artifacts/unify ./unify
+          cp -r ure-artifacts/ure ./ure
+
+      - name: Cache GHC
+        uses: actions/cache@v4
+        with:
+          path: ~/.stack
+          key: ghc-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ runner.arch }}
+          restore-keys: |
+            ghc-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-
+
+      - name: Cache Haskell Deps
+        uses: actions/cache@v4
+        with:
+          path: atomspace/opencog/haskell/.stack-work
+          key: haskelldeps-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ hashFiles('atomspace/opencog/haskell/opencog-atomspace.cabal') }}-${{ runner.arch }}
+          restore-keys: |
+            haskelldeps-${{ hashFiles('atomspace/opencog/haskell/stack.yaml') }}-${{ hashFiles('atomspace/opencog/haskell/opencog-atomspace.cabal') }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake \
+            libboost-all-dev \
+            libguile-3.0-dev guile-3.0 \
+            libcython3-dev python3-dev python3-nose python3-numpy \
+            ccache
+
+      - name: Install CogUtil
+        run: |
+          cd cogutil/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpace
+        run: |
+          cd atomspace/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install AtomSpaceStorage
+        run: |
+          cd atomspace-storage/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install Unify
+        run: |
+          cd unify/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install URE
+        run: |
+          cd ure/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Install CogServer
+        run: |
+          cd cogserver/build
+          sudo make install
+          sudo ldconfig
+
+      - name: Install Attention
+        run: |
+          cd attention/build
+          sudo make install
+          sudo ldconfig
+
+      - name: Install Link Grammar Atomese
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/lg-atomese lg-atomese
+          mkdir -p lg-atomese/build
+          cd lg-atomese/build
+          cmake ..
+          make -j2
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Checkout OpenCog
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/opencog opencog
+
+      - name: CMake Configure
+        run: |
+          cd opencog
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd opencog/build
+          make -j2
+
+      - name: Build tests
+        run: |
+          cd opencog/build
+          make -j2 tests
+
+      - name: Run tests
+        run: |
+          cd opencog/build
+          make -j2 check ARGS=-j2
+
+      - name: Install OpenCog
+        run: |
+          cd opencog/build
+          sudo make -j2 install
+          sudo ldconfig
+
+      - name: Print test log
+        if: always()
+        run: |
+          if [ -f opencog/build/tests/Testing/Temporary/LastTest.log ]; then
+            cat opencog/build/tests/Testing/Temporary/LastTest.log
+          fi
+
+      - name: Upload workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-opencog
+          path: |
+            cogutil/
+            atomspace/
+            atomspace-storage/
+            unify/
+            ure/
+            cogserver/
+            attention/
+            lg-atomese/
+            opencog/
+            ccache/
+          retention-days: 1
+
+  package:
+    runs-on: ubuntu-latest
+    needs: opencog
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-opencog
+
+      - name: Store ccache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ccache-${{ runner.os }}-${{ github.run_id }}
