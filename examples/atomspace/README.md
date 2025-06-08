@@ -46,6 +46,7 @@ first).
 * [`get-put.scm`](get-put.scm)               -- The two halves of a query: Get and Put.
 * [`assert-retract.scm`](assert-retract.scm) -- Asserting facts in the AtomSpace.
 * [`state.scm`](state.scm)                   -- Maintaining unique state.
+* [`geometric-unity.scm`](geometric-unity.scm) -- Geometric Unity unified field theory representation.
 * [`property.scm`](property.scm)             -- Designing Atoms with properties.
 * [`truthvalues.scm`](truthvalues.scm)       -- Declaring the truth of a proposition.
 * [`values.scm`](values.scm)                 -- Using Values and attaching them to Atoms.
@@ -87,6 +88,29 @@ be effective.
 * [`persist-buffer.scm`](persist-buffer.scm)  -- Delay repeated writes so as to limit I/O.
 * [`copy-on-write.scm`](copy-on-write.scm)    -- Read-only AtomSpace, with r/w overlays.
 * [`frame.scm`](frame.scm)                    -- Using StateLink in overlays.
+
+Geometric Unity
+---------------
+The AtomSpace includes support for representing Eric Weinstein's Geometric Unity 
+theory, which attempts to unify general relativity, gauge theory, and quantum 
+mechanics through a geometric framework.
+
+* [`geometric-unity.scm`](geometric-unity.scm) -- Complete example of representing GU structures including:
+  - Spacetime manifolds and fiber bundles
+  - Einstein tensor, Yang-Mills, and Dirac spinor fields  
+  - Mathematical operations (covariant derivatives, field strengths, actions)
+  - Unified geometric structures linking all three theories
+  - Pattern matching examples for exploring GU relationships
+
+The GU implementation provides atom types for:
+- **Geometric objects**: `SPACETIME_MANIFOLD`, `GAUGE_BUNDLE`, `SPINOR_BUNDLE`
+- **Physical fields**: `EINSTEIN_TENSOR_FIELD`, `YANG_MILLS_FIELD`, `DIRAC_SPINOR_FIELD`
+- **Mathematical operations**: `COVARIANT_DERIVATIVE`, `FIELD_STRENGTH`, action functionals
+- **Unification links**: `GEOMETRIC_UNITY_LINK`, `UNIFIED_FIELD_LINK`
+
+This enables researchers to represent unified field theory concepts as knowledge 
+graphs, perform computational exploration of geometric relationships, and potentially 
+discover new connections between the fundamental forces of physics.
 * [`gperf.scm`](gperf.scm)                    -- Some very crude performance measurements.
 
 Documentation

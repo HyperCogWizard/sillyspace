@@ -1,0 +1,206 @@
+//
+// geometric-unity-test.cc  
+//
+// Unit tests for Geometric Unity atom types.
+// Tests basic creation and functionality of GU-related atoms.
+//
+
+#include <opencog/atoms/atom_types/atom_types.h>
+#include <opencog/atoms/base/Atom.h>
+#include <opencog/atoms/base/Node.h>
+#include <opencog/atoms/base/Link.h>
+#include <opencog/atomspace/AtomSpace.h>
+
+#include <cxxtest/TestSuite.h>
+
+using namespace opencog;
+
+class GeometricUnityUTest : public CxxTest::TestSuite
+{
+private:
+    AtomSpacePtr as;
+
+public:
+    GeometricUnityUTest()
+    {
+        logger().set_level(Logger::DEBUG);
+        logger().set_print_to_stdout_flag(true);
+        as = createAtomSpace();
+    }
+
+    void setUp() {}
+    void tearDown() {}
+
+    // Test creation of basic geometric objects
+    void test_geometric_objects()
+    {
+        // Create a spacetime manifold
+        Handle spacetime = as->add_node(SPACETIME_MANIFOLD, "M4");
+        TS_ASSERT(spacetime != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(spacetime->get_type(), SPACETIME_MANIFOLD);
+        TS_ASSERT_EQUALS(spacetime->get_name(), "M4");
+
+        // Create a gauge bundle
+        Handle gauge_bundle = as->add_link(GAUGE_BUNDLE, 
+            spacetime,
+            as->add_node(CONCEPT_NODE, "SU3xSU2xU1")
+        );
+        TS_ASSERT(gauge_bundle != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(gauge_bundle->get_type(), GAUGE_BUNDLE);
+
+        // Create a spinor bundle  
+        Handle spinor_bundle = as->add_link(SPINOR_BUNDLE,
+            spacetime,
+            as->add_node(CONCEPT_NODE, "Dirac-spinors")
+        );
+        TS_ASSERT(spinor_bundle != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(spinor_bundle->get_type(), SPINOR_BUNDLE);
+    }
+
+    // Test creation of physical field atoms
+    void test_physical_fields()
+    {
+        Handle spacetime = as->add_node(SPACETIME_MANIFOLD, "M4");
+
+        // Test metric field
+        Handle metric = as->add_link(METRIC_FIELD,
+            as->add_node(CONCEPT_NODE, "g_mu_nu"),
+            spacetime
+        );
+        TS_ASSERT(metric != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(metric->get_type(), METRIC_FIELD);
+
+        // Test Einstein tensor field
+        Handle einstein_tensor = as->add_link(EINSTEIN_TENSOR_FIELD,
+            as->add_node(CONCEPT_NODE, "G_mu_nu"),
+            spacetime,
+            metric
+        );
+        TS_ASSERT(einstein_tensor != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(einstein_tensor->get_type(), EINSTEIN_TENSOR_FIELD);
+
+        // Test Yang-Mills field
+        Handle yang_mills = as->add_link(YANG_MILLS_FIELD,
+            as->add_node(CONCEPT_NODE, "A_mu"),
+            as->add_link(GAUGE_BUNDLE, spacetime, as->add_node(CONCEPT_NODE, "SU3"))
+        );
+        TS_ASSERT(yang_mills != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(yang_mills->get_type(), YANG_MILLS_FIELD);
+
+        // Test Dirac spinor field
+        Handle dirac_spinor = as->add_link(DIRAC_SPINOR_FIELD,
+            as->add_node(CONCEPT_NODE, "psi"),
+            as->add_link(SPINOR_BUNDLE, spacetime, as->add_node(CONCEPT_NODE, "fermions"))
+        );
+        TS_ASSERT(dirac_spinor != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(dirac_spinor->get_type(), DIRAC_SPINOR_FIELD);
+    }
+
+    // Test mathematical operations
+    void test_gu_operations()
+    {
+        Handle spacetime = as->add_node(SPACETIME_MANIFOLD, "M4");
+        Handle gauge_bundle = as->add_link(GAUGE_BUNDLE, spacetime, as->add_node(CONCEPT_NODE, "SU3"));
+        Handle yang_mills = as->add_link(YANG_MILLS_FIELD,
+            as->add_node(CONCEPT_NODE, "A_mu"), gauge_bundle);
+
+        // Test covariant derivative
+        Handle cov_deriv = as->add_link(COVARIANT_DERIVATIVE,
+            as->add_node(CONCEPT_NODE, "nabla_mu"),
+            gauge_bundle,
+            yang_mills
+        );
+        TS_ASSERT(cov_deriv != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(cov_deriv->get_type(), COVARIANT_DERIVATIVE);
+
+        // Test field strength
+        Handle field_strength = as->add_link(FIELD_STRENGTH,
+            yang_mills,
+            cov_deriv,
+            as->add_node(CONCEPT_NODE, "F_mu_nu")
+        );
+        TS_ASSERT(field_strength != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(field_strength->get_type(), FIELD_STRENGTH);
+
+        // Test action functionals
+        Handle yang_mills_action = as->add_link(YANG_MILLS_ACTION,
+            field_strength,
+            as->add_link(METRIC_FIELD, as->add_node(CONCEPT_NODE, "g"), spacetime),
+            spacetime
+        );
+        TS_ASSERT(yang_mills_action != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(yang_mills_action->get_type(), YANG_MILLS_ACTION);
+    }
+
+    // Test the unified geometric structure
+    void test_geometric_unity_link()
+    {
+        Handle spacetime = as->add_node(SPACETIME_MANIFOLD, "M4");
+        Handle gauge_bundle = as->add_link(GAUGE_BUNDLE, spacetime, as->add_node(CONCEPT_NODE, "SU3"));
+        Handle spinor_bundle = as->add_link(SPINOR_BUNDLE, spacetime, as->add_node(CONCEPT_NODE, "fermions"));
+        
+        Handle fields = as->add_link(LIST_LINK,
+            as->add_link(METRIC_FIELD, as->add_node(CONCEPT_NODE, "g"), spacetime),
+            as->add_link(YANG_MILLS_FIELD, as->add_node(CONCEPT_NODE, "A"), gauge_bundle),
+            as->add_link(DIRAC_SPINOR_FIELD, as->add_node(CONCEPT_NODE, "psi"), spinor_bundle)
+        );
+
+        // Create the unified geometric structure
+        Handle gu_structure = as->add_link(GEOMETRIC_UNITY_LINK,
+            spacetime,
+            gauge_bundle, 
+            spinor_bundle,
+            fields
+        );
+        TS_ASSERT(gu_structure != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(gu_structure->get_type(), GEOMETRIC_UNITY_LINK);
+        TS_ASSERT_EQUALS(gu_structure->get_arity(), 4);
+
+        // Test unified field equations
+        Handle actions = as->add_link(LIST_LINK,
+            as->add_link(EINSTEIN_HILBERT_ACTION, 
+                as->add_link(CURVATURE_FIELD, as->add_node(CONCEPT_NODE, "R"), spacetime),
+                as->add_link(METRIC_FIELD, as->add_node(CONCEPT_NODE, "g"), spacetime),
+                spacetime),
+            as->add_link(YANG_MILLS_ACTION,
+                as->add_link(FIELD_STRENGTH, as->add_node(CONCEPT_NODE, "F")),
+                as->add_link(METRIC_FIELD, as->add_node(CONCEPT_NODE, "g"), spacetime),
+                spacetime),
+            as->add_link(DIRAC_ACTION,
+                as->add_link(DIRAC_SPINOR_FIELD, as->add_node(CONCEPT_NODE, "psi"), spinor_bundle),
+                spacetime)
+        );
+
+        Handle unified_equations = as->add_link(UNIFIED_FIELD_LINK,
+            gu_structure,
+            actions,
+            as->add_node(CONCEPT_NODE, "variational-principle")
+        );
+        TS_ASSERT(unified_equations != Handle::UNDEFINED);
+        TS_ASSERT_EQUALS(unified_equations->get_type(), UNIFIED_FIELD_LINK);
+    }
+
+    // Test inheritance relationships
+    void test_type_inheritance()
+    {
+        // Test that geometric objects inherit correctly
+        TS_ASSERT(nameserver().isA(SPACETIME_MANIFOLD, MANIFOLD));
+        TS_ASSERT(nameserver().isA(MANIFOLD, GEOMETRIC_OBJECT));
+        TS_ASSERT(nameserver().isA(GEOMETRIC_OBJECT, LINK));
+
+        TS_ASSERT(nameserver().isA(GAUGE_BUNDLE, FIBER_BUNDLE));
+        TS_ASSERT(nameserver().isA(SPINOR_BUNDLE, FIBER_BUNDLE));
+        TS_ASSERT(nameserver().isA(FIBER_BUNDLE, GEOMETRIC_OBJECT));
+
+        // Test that field types inherit correctly
+        TS_ASSERT(nameserver().isA(EINSTEIN_TENSOR_FIELD, FIELD_NODE));
+        TS_ASSERT(nameserver().isA(YANG_MILLS_FIELD, FIELD_NODE));
+        TS_ASSERT(nameserver().isA(DIRAC_SPINOR_FIELD, FIELD_NODE));
+        TS_ASSERT(nameserver().isA(FIELD_NODE, NODE));
+
+        // Test that operations inherit correctly
+        TS_ASSERT(nameserver().isA(COVARIANT_DERIVATIVE, GU_OPERATION));
+        TS_ASSERT(nameserver().isA(FIELD_STRENGTH, GU_OPERATION));
+        TS_ASSERT(nameserver().isA(GU_OPERATION, FUNCTION_LINK));
+    }
+};

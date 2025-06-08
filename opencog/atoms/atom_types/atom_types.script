@@ -1316,3 +1316,47 @@ EQUIVALENCE_LINK <- UNORDERED_LINK
 
 // Undocumented mystery link. Used in unit tests.
 EXECUTION_LINK <- ORDERED_LINK
+
+// ====================================================================
+// Geometric Unity (GU) - Eric Weinstein's unified field theory
+// These atom types represent the geometric structures and physical
+// fields needed to implement Geometric Unity in the AtomSpace.
+//
+// GU attempts to unify:
+// 1. Einstein field equations (general relativity)
+// 2. Yang-Mills equations (gauge theory) 
+// 3. Dirac equation (quantum mechanics)
+//
+// The approach uses fiber bundle geometry to represent spacetime
+// and gauge fields in a unified mathematical framework.
+
+// Base classes for geometric objects
+GEOMETRIC_OBJECT <- LINK
+MANIFOLD <- GEOMETRIC_OBJECT
+FIBER_BUNDLE <- GEOMETRIC_OBJECT
+CONNECTION <- GEOMETRIC_OBJECT
+
+// Specific geometric structures for GU
+SPACETIME_MANIFOLD <- MANIFOLD          // 4D spacetime manifold
+GAUGE_BUNDLE <- FIBER_BUNDLE           // Principal bundle for gauge fields
+SPINOR_BUNDLE <- FIBER_BUNDLE          // Spinor bundle for fermions
+
+// Physical field representations
+FIELD_NODE <- NODE                     // Base for all field types
+EINSTEIN_TENSOR_FIELD <- FIELD_NODE    // Einstein tensor G_μν
+YANG_MILLS_FIELD <- FIELD_NODE         // Yang-Mills gauge field A_μ  
+DIRAC_SPINOR_FIELD <- FIELD_NODE       // Dirac spinor field ψ
+METRIC_FIELD <- FIELD_NODE             // Metric tensor g_μν
+CURVATURE_FIELD <- FIELD_NODE          // Riemann curvature tensor
+
+// Mathematical operations for GU
+GU_OPERATION <- FUNCTION_LINK
+COVARIANT_DERIVATIVE <- GU_OPERATION   // ∇_μ operator
+FIELD_STRENGTH <- GU_OPERATION         // F_μν = ∂_μA_ν - ∂_νA_μ + [A_μ,A_ν]
+EINSTEIN_HILBERT_ACTION <- GU_OPERATION // ∫ R √(-g) d⁴x
+YANG_MILLS_ACTION <- GU_OPERATION      // ∫ Tr(F_μν F^μν) √(-g) d⁴x
+DIRAC_ACTION <- GU_OPERATION           // ∫ ψ̄ (iγ^μ∇_μ - m) ψ √(-g) d⁴x
+
+// GU unification links
+GEOMETRIC_UNITY_LINK <- ORDERED_LINK   // Links geometric and gauge structures
+UNIFIED_FIELD_LINK <- ORDERED_LINK     // Represents unified field equations
