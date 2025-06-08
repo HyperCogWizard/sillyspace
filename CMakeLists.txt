@@ -85,7 +85,10 @@ IF (COGUTIL_FOUND)
 	ADD_DEFINITIONS(-DHAVE_COGUTIL)
 	SET(HAVE_COGUTIL 1)
 ELSE (COGUTIL_FOUND)
-	MESSAGE(FATAL_ERROR "CogUtil missing: it is needed!")
+	MESSAGE(FATAL_ERROR "CogUtil missing: it is needed!\n"
+		"Please install prerequisites by running:\n"
+		"  ./install-prerequisites.sh\n"
+		"Or install CogUtil manually from: https://github.com/opencog/cogutil")
 ENDIF (COGUTIL_FOUND)
 
 # add the 'cmake' directory from cogutil to search path
@@ -105,6 +108,8 @@ IF (CXXTEST_FOUND)
 	MESSAGE(STATUS "CxxTest found.")
 ELSE (CXXTEST_FOUND)
 	MESSAGE(STATUS "CxxTest missing: needed for unit tests.")
+	MESSAGE(STATUS "Install with: apt install cxxtest")
+	MESSAGE(STATUS "Or run: ./install-prerequisites.sh")
 ENDIF (CXXTEST_FOUND)
 
 # ----------------------------------------------------------

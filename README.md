@@ -637,14 +637,30 @@ run on any non-Linux operating systems (except maybe some of the BSD's).
 Sorry!
 
 There are a small number of pre-requisites that must be installed
-before it can be built.  Many users will find it easiest to use the
-install scripts provided in the [ocpkg repo](https://github.com/opencog/ocpkg).
-Some users may find some success with one of the
+before it can be built. **For the easiest installation**, simply run:
+
+```bash
+./install-prerequisites.sh
+```
+
+This script will automatically install all required dependencies including
+cmake, guile, cxxtest, and cogutil. It also installs optional dependencies
+like Cython for Python bindings.
+
+Alternatively, you can use the install scripts provided in the 
+[ocpkg repo](https://github.com/opencog/ocpkg), or use one of the
 [opencog Docker containers](https://github.com/opencog/docker).
 Developers interested in working on the AtomSpace must be able to build
 it manually. If you can't do that, all hope is lost.
 
 ### Prerequisites
+
+**Quick Installation (Recommended):**
+```bash
+./install-prerequisites.sh
+```
+
+**Manual Installation:**
 
 To build the OpenCog AtomSpace, the packages listed below are required.
 Essentially all Linux distributions will provide these packages.
@@ -695,8 +711,14 @@ during the build, will be more precise as to which parts will not be built.
 
 ### Building AtomSpace
 
-Be sure to install the pre-requisites first!
-Perform the following steps at the shell prompt:
+**Prerequisites must be installed first!** Run:
+```bash
+./install-prerequisites.sh
+```
+
+Or see the manual installation instructions below.
+
+Once prerequisites are installed, perform the following steps at the shell prompt:
 ```
     cd to project root dir
     mkdir build
